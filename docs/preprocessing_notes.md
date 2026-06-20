@@ -15,7 +15,7 @@ Label Encoding:
 A -> 0
 B -> 1
 C -> 2
-
+G
 Train-Test Split:
 80% Training
 20% Testing
