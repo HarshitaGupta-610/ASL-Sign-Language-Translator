@@ -1,9 +1,12 @@
+from streamlit_webrtc import webrtc_streamer
 import streamlit as st
 import cv2
 import mediapipe as mp
 import numpy as np
 import pickle
-
+import av
+import threading
+prediction_placeholder = st.empty()
 # -----------------------------
 # Page Config
 # -----------------------------
@@ -39,6 +42,9 @@ def load_model():
     return model, encoder
 
 model, encoder = load_model()
+global_latest_prediction = ["-"]
+if "latest_prediction" not in st.session_state:
+    st.session_state["latest_prediction"] = "-"
 
 # -----------------------------
 # MediaPipe Setup
@@ -130,6 +136,74 @@ with btn2:
 # -----------------------------
 # Layout
 # -----------------------------
+def video_frame_callback(frame):
+
+    img = frame.to_ndarray(format="bgr24")
+
+    rgb = cv2.cvtColor(
+        img,
+        cv2.COLOR_BGR2RGB
+    )
+
+    results = hands.process(rgb)
+
+    if results.multi_hand_landmarks:
+
+        hand = results.multi_hand_landmarks[0]
+
+        mp_draw.draw_landmarks(
+            img,
+            hand,
+            mp_hands.HAND_CONNECTIONS
+        )
+
+        landmarks = []
+
+        for lm in hand.landmark:
+            landmarks.extend([
+                lm.x,
+                lm.y,
+                lm.z
+            ])
+
+        print("Landmarks Length:", len(landmarks))
+
+        if len(landmarks) == 63:
+
+            X = np.array(landmarks).reshape(1, -1)
+
+            print("Input Shape:", X.shape)
+
+            prediction = model.predict(X)
+
+            label = encoder.inverse_transform(
+                prediction
+            )[0]
+
+            print("Prediction:", label)
+            global_latest_prediction[0] = label
+
+            
+            
+
+            cv2.putText(
+                img,
+                f"Sign: {label}",
+                (20, 50),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                1,
+                (0, 255, 0),
+                2
+            )
+
+    else:
+
+        print("NO HAND DETECTED")
+
+    return av.VideoFrame.from_ndarray(
+        img,
+        format="bgr24"
+    )
 left_col, right_col = st.columns([5,1])
 
 with left_col:
@@ -138,65 +212,26 @@ with left_col:
 
     if st.session_state["camera_on"]:
 
-        cap = cv2.VideoCapture(0)
-
-        success, frame = cap.read()
-
-        if success:
-
-            rgb = cv2.cvtColor(
-                frame,
-                cv2.COLOR_BGR2RGB
-            )
-
-            results = hands.process(rgb)
-
-            if results.multi_hand_landmarks:
-
-                hand = results.multi_hand_landmarks[0]
-
-                mp_draw.draw_landmarks(
-                    frame,
-                    hand,
-                    mp_hands.HAND_CONNECTIONS
-                )
-
-                landmarks = []
-
-                for lm in hand.landmark:
-                    landmarks.extend(
-                        [lm.x, lm.y, lm.z]
-                    )
-
-                if len(landmarks) == 63:
-
-                    X = np.array(
-                        landmarks
-                    ).reshape(1, -1)
-
-                    prediction = model.predict(X)
-
-                    label = encoder.inverse_transform(
-                        prediction
-                    )[0]
-
-                    st.session_state["detected_sign"] = label
-
-            camera_placeholder.image(
-                frame,
-                channels="BGR",
-                use_container_width=True
-            )
-
-        cap.release()
+     webrtc_streamer(
+        key="asl-camera",
+        video_frame_callback=video_frame_callback,
+        media_stream_constraints={
+            "video": {
+                "width": {"ideal": 640},
+                "height": {"ideal": 480}
+            },
+            "audio": False
+        },
+        async_processing=True
+    )
 
     else:
 
-        camera_placeholder.markdown("""
-        <div class="camera-box">
-            Camera feed will appear here — press Start
-        </div>
-        """, unsafe_allow_html=True)
+     camera_placeholder.markdown("""
+    <div class="camera-box">
+        Camera feed will appear here — press Start
+    </div>
+    """, unsafe_allow_html=True)
 
 with right_col:
 
@@ -230,10 +265,14 @@ with right_col:
         <img src="https://img.icons8.com/ios/50/rules.png" width="28">
     </div>
     """, unsafe_allow_html=True)
+
+st.session_state["detected_sign"] = global_latest_prediction[0]
 # -----------------------------
 # Detected Sign
 # -----------------------------
 st.write("")
+st.write("Current prediction is shown on the webcam feed.")
+st.write("DEBUG:", global_latest_prediction[0])
 
 st.markdown("""
 <h3 style="

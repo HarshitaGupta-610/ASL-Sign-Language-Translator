@@ -58,9 +58,11 @@ while True:
 
             X = np.array(landmarks).reshape(1, -1)
 
+            print("Landmarks Length:", len(landmarks))
             prediction = model.predict(X)
 
             label = encoder.inverse_transform(prediction)[0]
+            print("Prediction:", label)
 
             prediction_buffer.append(label)
 
