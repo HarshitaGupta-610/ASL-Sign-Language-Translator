@@ -61,26 +61,36 @@ while True:
             2
         )
 
+        
     cv2.imshow("Dataset Collection", frame)
 
-    key = cv2.waitKey(1)
+    key = cv2.waitKey(1) & 0xFF
+    if key != 255:
+     print("Key pressed:", key)
 
-    if key == ord('s') and results.multi_hand_landmarks:
+    if key == ord('s'):
 
-        row = [LETTER]
+        if not results.multi_hand_landmarks:
+            print("❌ No hand detected. Show your hand and press S again.")
 
-        for lm in hand.landmark:
-            row.extend([lm.x, lm.y, lm.z])
+        else:
+            hand = results.multi_hand_landmarks[0]
 
-        with open("data/landmarks.csv", "a", newline="") as f:
-            csv.writer(f).writerow(row)
+            row = [LETTER]
 
-        sample_count += 1
+            for lm in hand.landmark:
+                row.extend([lm.x, lm.y, lm.z])
 
-        print(f"Saved sample {sample_count}")
+            with open("data/landmarks.csv", "a", newline="") as f:
+                csv.writer(f).writerow(row)
+
+            sample_count += 1
+            print(f"✅ Saved sample {sample_count}")
 
     if key == 27:
         break
+
+
 
 cap.release()
 cv2.destroyAllWindows()
